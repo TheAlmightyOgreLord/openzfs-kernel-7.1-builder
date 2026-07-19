@@ -3,6 +3,9 @@
 A clean, self-contained, build script for **OpenZFS 2.4.3** that creates an easy-to-manage offline DNF repo.
 Hardcoded and rigorously tested for **Fedora 43** with **Linux Kernel 7.1.x**.
 
+# 🔧 Testing Methodology:
+Validated against fresh Fedora 43 VM snapshots with reproducible success.
+
 ## 🚀 Quick Start
 
 ```bash
@@ -16,7 +19,7 @@ sudo ./build.sh
 
 Creates an offline, self-contained OpenZFS repo for rolling kernel updates on Fedora 43
 
-Deterministic: Pins specific commits for bit-for-bit reproducibility.
+Stable Source: Targets the official OpenZFS 2.4.3 release tag.
 
 Clean: Removes all build artifacts upon completion.
 
