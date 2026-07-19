@@ -6,7 +6,7 @@ Hardcoded and rigorously tested for **Fedora 43** with **Linux Kernel 7.1.x**.
 ## 🚀 Quick Start
 
 ```bash
-git clone https://github.com/yourusername/openzfs-kernel-7.1-builder.git
+git clone https://github.com/TheAlmightyOgreLord/openzfs-kernel-7.1-builder.git
 cd openzfs-kernel-7.1-builder
 sudo ./build.sh
 
