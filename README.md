@@ -19,7 +19,7 @@ sudo ./build.sh
 
 Creates an offline, self-contained OpenZFS repo for rolling kernel updates on Fedora 43
 
-Stable Source: Targets the official OpenZFS 2.4.3 release tag.
+Stable Source: Targets the official OpenZFS release tag.
 
 Clean: Removes all build artifacts upon completion.
 
