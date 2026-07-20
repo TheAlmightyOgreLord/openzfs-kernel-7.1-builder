@@ -274,17 +274,7 @@ EOF
 
 # Cleanup
 cd ..
-rm -rf "$WORK_DIR"
-
-echo "✅ SUCCESS!"
-echo "   - Repository created at: $REPO_DIR"
-echo "   - DNF config: /etc/yum.repos.d/${REPO_NAME}.repo"
-echo ""
-echo "Next steps:"
-echo "   1. Remove old ZFS: dnf remove zfs zfs-dkms zfs-dracut"
-echo "   2. Install from local repo: dnf install zfs zfs-dkms zfs-dracut --repo=${REPO_NAME}"
-echo "   3. If Secure Boot is enabled, REBOOT to enroll MOK key (Password: secureboot)."
-echo "   4. Load module: modprobe zfs"   
+rm -rf "$WORK_DIR"   
 
 echo "✅ SUCCESS!"
 echo "   - Repository created at: $REPO_DIR"
