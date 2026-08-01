@@ -52,8 +52,21 @@ cd ~/rpmbuild/SOURCES
 tar xzf zfs-${ZFS_VERSION}.tar.gz
 cd zfs-${ZFS_VERSION}
 
-# Apply the Kernel 7.1 fix to the META file
+# 1. Apply the Kernel 7.1 fix to the META file
 sed -i 's/^Linux-Maximum: .*/Linux-Maximum: 7.1/' META
+
+# 2. Apply the REAL fix for Issue #18787 (mmap read underflow)
+# This backports commit 223b8bc from OpenZFS master
+echo "   - Backporting upstream fix for Issue #18787 (zfs_fillpage underflow)..."
+curl -sL "https://github.com/openzfs/zfs/commit/223b8bc.patch" -o /tmp/zfs-18787-fix.patch
+
+if patch -p1 < /tmp/zfs-18787-fix.patch; then
+    echo "   - ✅ Upstream fix applied successfully."
+else
+    echo "   - ❌ ERROR: Failed to apply upstream fix. Check ZFS version."
+    exit 1
+fi
+rm -f /tmp/zfs-18787-fix.patch
 
 # Re-pack the tarball so rpmbuild uses the patched version
 cd ..
@@ -274,17 +287,7 @@ EOF
 
 # Cleanup
 cd ..
-rm -rf "$WORK_DIR"
-
-echo "✅ SUCCESS!"
-echo "   - Repository created at: $REPO_DIR"
-echo "   - DNF config: /etc/yum.repos.d/${REPO_NAME}.repo"
-echo ""
-echo "Next steps:"
-echo "   1. Remove old ZFS: dnf remove zfs zfs-dkms zfs-dracut"
-echo "   2. Install from local repo: dnf install zfs zfs-dkms zfs-dracut --repo=${REPO_NAME}"
-echo "   3. If Secure Boot is enabled, REBOOT to enroll MOK key (Password: secureboot)."
-echo "   4. Load module: modprobe zfs"   
+rm -rf "$WORK_DIR" 
 
 echo "✅ SUCCESS!"
 echo "   - Repository created at: $REPO_DIR"
