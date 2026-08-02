@@ -35,7 +35,26 @@ sudo ./build.sh
 
 - Kernel: 7.1.x only
 
-- Source: OpenZFS 2.4.3 (with official 2.4.4 backports) 
+- Source: OpenZFS 2.4.3 (with official 2.4.4 backports)
+
+## 🏭 Enterprise & CI/CD Integration
+
+This script is designed for **automation-first** environments, enabling secure, scalable deployment of OpenZFS on bleeding-edge kernels.
+
+*   **Build Integrity:** The script pre-installs all required build dependencies via `dnf` in a clean, isolated environment. The `rpmbuild --nodeps` flag is used safely to bypass redundant RPM database checks, ensuring builds do not fail due to transient metadata issues while maintaining full binary compatibility. 
+*   **SBOM Ready:** The resulting RPMs contain complete dependency metadata (`Requires`/`Provides`) auto-generated from the compiled binaries. Standard enterprise tools (e.g., **Syft**, **Trivy**, **Anchore**) can instantly scan these RPMs to generate compliant **CycloneDX** or **SPDX** Software Bill of Materials (SBOM) artifacts. 
+*   **Secure Boot & UKI:** Generates modules compatible with Secure Boot and Unified Kernel Image (UKI) workflows. Integrates seamlessly with CI/CD pipelines to sign modules using organization-held Machine Owner Keys (MOK). 
+*   **Immutable Deployment:** Adopt a **"Build Once, Deploy Many"** strategy. Build the RPM in a CI pipeline (GitHub Actions, Jenkins, GitLab CI) and deploy the *exact same binary* across your entire cluster, ensuring bit-for-bit consistency and auditability.
+*   **Provenance:** Documents exact upstream commits (`a35e8d8`, `223b8bc`) in the build process, satisfying **NIST SSDF** provenance requirements and enabling easy audit trails for regulated environments.
+
+> **Example CI/CD Workflow:**
+> 1. Trigger: Initiate build on new Kernel 7.1.x release (or when updating backport commits in the script).
+> 2. Build: CI runs build.sh in an isolated container/VM, which automatically fetches source, applies patches, and builds RPMs.
+> 3. Sign: CI signs RPMs and modules with organization Secure Boot keys.
+> 4. Publish: CI pushes signed RPMs to a private DNF repository (e.g., GitHub Packages, Artifactory).
+> 5. Deploy: On initial deployment, remove official packages and install from the local repo: dnf remove -y zfs zfs-dkms zfs-dracut && dnf install -y zfs zfs-dkms zfs-dracut --repo=zfs-patched-local (Subsequent kernel updates will then handle ZFS modules automatically via the local repo.)
+
+---
 
 ## 📄 License
 
