@@ -42,7 +42,6 @@ wget -q "https://github.com/openzfs/zfs/releases/download/zfs-${ZFS_VERSION}/zfs
 echo "🔧 Preparing source for RPM build..."
 cp "zfs-${ZFS_VERSION}.tar.gz" ~/rpmbuild/SOURCES/
 
-
 # ... (After copying tarball to SOURCES) ...
 
 # CRITICAL FIX: Patch the source tree that rpmbuild will use
@@ -52,21 +51,36 @@ cd ~/rpmbuild/SOURCES
 tar xzf zfs-${ZFS_VERSION}.tar.gz
 cd zfs-${ZFS_VERSION}
 
-# 1. Apply the Kernel 7.1 fix to the META file
-sed -i 's/^Linux-Maximum: .*/Linux-Maximum: 7.1/' META
+# Initialize a temporary git repo to allow 'git apply' (cleaner than 'patch')
+git init -q
+# Set local dummy identity to avoid "Author identity unknown" errors on fresh systems
+git config user.email "builder@localhost"
+git config user.name "OpenZFS Builder"
+git add -A
+git commit -q -m "Initial upstream source"
 
-# 2. Apply the REAL fix for Issue #18787 (mmap read underflow)
-# This backports commit 223b8bc from OpenZFS master
-echo "   - Backporting upstream fix for Issue #18787 (zfs_fillpage underflow)..."
-curl -sL "https://github.com/openzfs/zfs/commit/223b8bc.patch" -o /tmp/zfs-18787-fix.patch
-
-if patch -p1 < /tmp/zfs-18787-fix.patch; then
-    echo "   - ✅ Upstream fix applied successfully."
-else
-    echo "   - ❌ ERROR: Failed to apply upstream fix. Check ZFS version."
+# 1. Apply OFFICIAL Kernel 7.1 META fix (Commit a35e8d8)
+# Replaces manual sed with the exact upstream change signed by maintainers
+echo "   - Backporting official META fix for Linux 7.1 (Commit a35e8d8)..."
+if ! curl -sSL "https://github.com/openzfs/zfs/commit/a35e8d8.patch" | git apply -; then
+    echo "   - ❌ ERROR: Failed to apply official META patch."
     exit 1
 fi
-rm -f /tmp/zfs-18787-fix.patch
+echo "   - ✅ Official META patch applied."
+
+# 2. Apply the REAL fix for Issue #18787 (mmap read underflow)
+# Backports commit 223b8bc using git apply for atomic safety
+echo "   - Backporting upstream fix for Issue #18787 (zfs_fillpage underflow)..."
+if ! curl -sSL "https://github.com/openzfs/zfs/commit/223b8bc.patch" | git apply -; then
+    echo "   - ❌ ERROR: Failed to apply Issue #18787 fix."
+    exit 1
+fi
+echo "   - ✅ Issue #18787 fix applied."
+
+# Cleanup temporary git data (optional, keeps source tree clean for rpmbuild)
+rm -rf .git
+
+echo "   - ✅ Source tree successfully patched with upstream commits."   
 
 # Re-pack the tarball so rpmbuild uses the patched version
 cd ..
@@ -74,7 +88,6 @@ tar czf zfs-${ZFS_VERSION}.tar.gz zfs-${ZFS_VERSION}
 rm -rf zfs-${ZFS_VERSION}
 
 echo "   - Source tarball patched and repacked."   
-
 
 # C. Extract the NOW-PATCHED tarball to run configure and generate dkms.conf
 # We extract from the patched SOURCES tarball, not the original WORK_DIR one
@@ -84,7 +97,7 @@ cd "zfs-${ZFS_VERSION}"
 
 # D. Run configure to generate spec files
 echo "   - Running configure..."
-./configure --with-spec=redhat --enable-linux-experimental --without-libunwind --with-dkms
+./configure --with-spec=redhat --without-libunwind
 
 # E. Generate dkms.conf with correct arguments
 echo "   - Generating module/dkms.conf..."
@@ -107,24 +120,13 @@ fi
 
 # G. Patch the SPEC file
 echo "   - Patching zfs.spec..."
-sed -i 's/%configure/%configure --enable-linux-experimental --without-libunwind/' ~/rpmbuild/SPECS/zfs.spec
-
-# H. Patch the dkms.conf for multi-line PRE_BUILD
-echo "   - Patching module/dkms.conf for Kernel 7.1..."
-if ! grep -q "\-\-enable-linux-experimental" module/dkms.conf; then
-    sed -i ':a;N;$!ba;s/\(PRE_BUILD="\([^"]*\)\)"/\1 --enable-linux-experimental"/g' module/dkms.conf
-    if ! grep -q "\-\-enable-linux-experimental" module/dkms.conf; then
-        echo "❌ Failed to patch dkms.conf."
-        exit 1
-    fi
-fi
+sed -i 's/%configure/%configure --without-libunwind/' ~/rpmbuild/SPECS/zfs.spec
 
 echo "✅ Section 3 Complete. Ready to build."
 
 # 2. Run configure to generate spec files and Makefiles
-# Use --enable-linux-experimental (NOT --enable-experimental)
 echo "⚙️ Running configure..."
-./configure --with-spec=redhat --enable-linux-experimental --without-libunwind --with-dkms
+./configure --with-spec=redhat --without-libunwind
 
 # 3. CRITICAL: Generate dkms.conf
 echo "   - Generating module/dkms.conf..."
@@ -158,57 +160,11 @@ else
     exit 1
 fi
 
-# 5. Patch the SPEC file for experimental support
-echo "🔧 Patching zfs.spec for experimental support..."
-sed -i 's/%configure/%configure --enable-linux-experimental/' ~/rpmbuild/SPECS/zfs.spec
-
-# 6. Patch the NOW-EXISTING dkms.conf
-echo "   - Patching module/dkms.conf..."
-
-# The PRE_BUILD block spans multiple lines. We need to inject the flag 
-# before the closing quote of the PRE_BUILD variable.
-# Strategy: Find the line ending the PRE_BUILD block (the standalone ") 
-# and insert the flag on the line before it.
-
-# 1. Check if the flag is already present
-if grep -q "\-\-enable-linux-experimental" module/dkms.conf; then
-    echo "   - Flag already present, skipping patch."
-else
-    # 2. Inject the flag before the closing quote of PRE_BUILD
-    # We look for the line with the closing parenthesis and quote: )"
-    # and insert the flag on the previous line.
-    sed -i '/^  --with-linux-obj=/,/^\s*"/ {
-        /^\s*"/ {
-            s/^\s*"/  --enable-linux-experimental\n"/
-        }
-    }' module/dkms.conf
-
-    # Alternative simpler approach if the above is too complex for your sed version:
-    # Just append the flag to the specific line before the closing quote
-    # Find the line with the last configure argument (usually --with-linux-obj) and append there
-    if ! grep -q "\-\-enable-linux-experimental" module/dkms.conf; then
-        # Fallback: Insert before the closing quote of PRE_BUILD
-        # This regex finds the closing quote of the PRE_BUILD block and inserts the flag before it
-        sed -i ':a;N;$!ba;s/\(PRE_BUILD="\([^"]*\)\)"/\1 --enable-linux-experimental"/g' module/dkms.conf
-    fi
-
-    # 3. Verify
-    if grep -q "\-\-enable-linux-experimental" module/dkms.conf; then
-        echo "   - dkms.conf patched successfully."
-    else
-        echo "❌ Failed to patch dkms.conf (flag not found)."
-        echo "   --- Current PRE_BUILD Block ---"
-        sed -n '/^PRE_BUILD=/,/^"/p' module/dkms.conf
-        exit 1
-    fi
-fi
-
 # 4. Build User-Space RPMs
 echo "🏗️ Building user-space RPMs..."
 rm -rf ~/rpmbuild/BUILD/zfs-*
 
 rpmbuild -bb ~/rpmbuild/SPECS/zfs.spec \
-    --define "with_experimental 1" \
     --define "with_utils 1" \
     --define "_topdir $HOME/rpmbuild" \
     --nodeps
