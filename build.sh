@@ -13,22 +13,35 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-echo "🚀 Starting OpenZFS $ZFS_VERSION build for Kernel 7.1.x..."
+# --- Fedora Version Detection ---
+FEDORA_VERSION=$(rpm -E %fedora)
+echo "🔍 Detected Fedora version: $FEDORA_VERSION"
+
+# Prepare Dependency List
+DEPS=(
+    git rpm-build rpmdevtools wget createrepo_c
+    kernel-devel kernel-headers
+    elfutils-libelf-devel zlib-devel libuuid-devel libblkid-devel
+    libtirpc-devel libselinux-devel libudev-devel
+    openssl-devel python3-devel python3-packaging libffi-devel
+    lz4-devel libzstd-devel
+    autoconf automake libtool
+    ksh ncompress
+    gcc make
+    dkms sysstat perl mokutil
+)
+
+# Fedora 44+ requires explicit python3-setuptools (removed from python3-devel deps)
+if [[ $FEDORA_VERSION -ge 44 ]]; then
+    echo "⚠️  Fedora 44+ detected: Adding explicit python3-setuptools dependency..."
+    DEPS+=(python3-setuptools)
+fi
 
 # 1. Prepare Environment
 echo "📦 Installing build dependencies..."
-dnf install -y \
-    git rpm-build rpmdevtools wget createrepo_c \
-    kernel-devel kernel-headers \
-    elfutils-libelf-devel zlib-devel libuuid-devel libblkid-devel \
-    libtirpc-devel libselinux-devel libudev-devel \
-    openssl-devel python3-devel python3-packaging libffi-devel \
-    lz4-devel libzstd-devel \
-    autoconf automake libtool \
-    ksh ncompress \
-    gcc make \
-    dkms sysstat perl mokutil \
-    lsb_release
+dnf install -y "${DEPS[@]}"
+
+echo "🚀 Starting OpenZFS $ZFS_VERSION build for Kernel 7.1.x..."
 
 mkdir -p "$WORK_DIR" "$REPO_DIR"
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
@@ -120,7 +133,21 @@ fi
 
 # G. Patch the SPEC file
 echo "   - Patching zfs.spec..."
-sed -i 's/%configure/%configure --without-libunwind/' ~/rpmbuild/SPECS/zfs.spec
+SPEC_FILE="$HOME/rpmbuild/SPECS/zfs.spec"
+
+# 1. Disable libunwind (existing fix)
+sed -i 's/%configure/%configure --without-libunwind/' "$SPEC_FILE"
+
+# 2. Inject changelog entry (Required for Fedora 44, clean for 43)
+# Appends a standard entry to satisfy %source_date_epoch_from_changelog
+if grep -q "^%changelog" "$SPEC_FILE"; then
+    sed -i '/^%changelog/a * Mon Aug 03 2026 Automated Build <builder@localhost> - '"$ZFS_VERSION"'-1\n- Automated build for Kernel 7.1.x (Backports: a35e8d8, 223b8bc)' "$SPEC_FILE"
+    echo "   - Injected changelog entry for reproducible builds."
+else
+    echo "   - ⚠️ Warning: %changelog section not found in spec file."
+fi
+
+echo "✅ Section 3 Complete. Ready to build."
 
 echo "✅ Section 3 Complete. Ready to build."
 
@@ -250,5 +277,5 @@ echo "   - Repository created at: $REPO_DIR"
 echo "   - DNF config: /etc/yum.repos.d/${REPO_NAME}.repo"
 echo ""
 echo "Next steps:"
-echo "   1. Remove old ZFS: dnf remove zfs zfs-dkms zfs-dracut"
-echo "   2. Install from local repo: dnf install zfs zfs-dkms zfs-dracut --repo=${REPO_NAME}"
+echo "   1. Remove old ZFS and dependencies: dnf remove zfs zfs-dkms zfs-dracut libnvpair* libuutil* libzfs* libzpool*"
+echo "   2. Install from local repo (pulls isolated dependencies): dnf install zfs zfs-dkms zfs-dracut --repo=${REPO_NAME}"
