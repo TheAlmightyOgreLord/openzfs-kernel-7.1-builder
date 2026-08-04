@@ -9,7 +9,14 @@ This script **backports official upstream commits** to natively support Kernel 7
 
 *   **Native Kernel 7.1 Support:** Applies **official upstream commit `a35e8d8`** (signed by OpenZFS maintainers Tony Hutter and Rob Norris) to update the `META` file.  This removes the "EXPERIMENTAL" kernel warning and the need for `--enable-linux-experimental`.
 *   **Atomic Patching:** Uses `git apply` instead of `patch` for all changes. This ensures an **all-or-nothing** application: if a patch doesn't fit perfectly, the script aborts safely rather than creating a broken build.
-*   **Critical Bug Fix:** Backports **commit `223b8bc`** to resolve **Issue #18787** (mmap read underflow/memory corruption) present in vanilla 2.4.3 on Kernel 7.1. 
+*   **Critical Bug Fix:** Backports **commit `223b8bc`** to resolve **Issue #18787** (mmap read underflow/memory corruption) present in vanilla 2.4.3 on Kernel 7.1.
+*   **Native Async I/O Support:** Explicitly links libaio-devel to enable native asynchronous I/O.
+
+    > Impact: Prevents fallback to inefficient POSIX emulation, ensuring maximum throughput and reduced latency for database and VM workloads.
+
+*   **Enterprise SELinux Integration:** Explicitly links libattr-devel and enforces xattr=sa (System Attributes).
+
+    > Impact: Enables granular, per-file SELinux labeling (required for strict security policies) and provides a ~3x performance improvement for metadata-heavy operations compared to directory-based xattrs. For root pools, enable maximum performance by setting ```zfs set xattr=sa <pool/dataset>``` and running ```restorecon -Rv /``` to migrate existing labels to the faster System Attribute format.
 *   **Zero-Trust Model:** Configures its own temporary Git environment, requiring no prior user configuration or global Git settings.
 *   **Native Support for Fedora 44:** (tested in a fresh, updated Fedora 44 Workstation VM)
 
@@ -20,6 +27,18 @@ git clone https://github.com/TheAlmightyOgreLord/openzfs-kernel-7.1-builder.git
 cd openzfs-kernel-7.1-builder
 sudo ./build.sh
 ```
+## 🔄 Updating Your Build
+To update to a newer version of this patched build:
+1.  **Re-run the script**: Simply execute `./build.sh` again.
+    *   The script will automatically overwrite the old RPMs in the local repository.
+    *   It will refresh the DNF metadata to recognize the new version.
+2.  **Reinstall/Upgrade**: Run the standard install command:
+    ```bash
+    sudo dnf -y remove zfs zfs-dkms zfs-dracut libnvpair* libuutil* libzfs* libzpool*
+    sudo dnf -y install zfs zfs-dkms zfs-dracut --repo=zfs-patched-local
+    ```
+    *   DNF will detect the newer RPMs in your local repo and upgrade seamlessly.
+    *   **No manual cleanup of `/etc/yum.repos.d/` is required.**   
 
 ## 🛡️ Features
 - Isolated Build: Downloads and builds OpenZFS from official upstream sources in a temporary directory.
@@ -54,7 +73,7 @@ This script is designed for **automation-first** environments, enabling secure, 
 > 2. Build: CI runs build.sh in an isolated container/VM, which automatically fetches source, applies patches, and builds RPMs.
 > 3. Sign: CI signs RPMs and modules with organization Secure Boot keys.
 > 4. Publish: CI pushes signed RPMs to a private DNF repository (e.g., GitHub Packages, Artifactory).
-> 5. Deploy: On initial deployment, remove official packages and install from the local repo: dnf remove -y zfs zfs-dkms zfs-dracut && dnf install -y zfs zfs-dkms zfs-dracut --repo=zfs-patched-local (Subsequent kernel updates will then handle ZFS modules automatically via the local repo.)
+> 5. Deploy: On initial deployment, remove official packages and install from the local repo: dnf -y remove zfs zfs-dkms zfs-dracut libnvpair* libuutil* libzfs* libzpool* && dnf -y install zfs zfs-dkms zfs-dracut --repo=zfs-patched-local (Subsequent kernel updates will then handle ZFS modules automatically via the local repo.)
 
 ---
 
