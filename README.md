@@ -14,7 +14,7 @@ This script **backports official upstream commits** to natively support Kernel 7
 
     > Impact: Prevents fallback to inefficient POSIX emulation, ensuring maximum throughput and reduced latency for database and VM workloads.
 
-*   **Enterprise SELinux Integration:** Explicitly links libattr-devel and enforces xattr=sa (System Attributes).
+*   **Enterprise SELinux Integration:** Explicitly links libattr-devel and allows the use of xattr=sa (System Attributes).
 
     > Impact: Enables granular, per-file SELinux labeling (required for strict security policies) and provides a ~3x performance improvement for metadata-heavy operations compared to directory-based xattrs. For root pools, enable maximum performance by setting ```zfs set xattr=sa <pool/dataset>``` and running ```restorecon -Rv /``` to migrate existing labels to the faster System Attribute format.
 *   **Zero-Trust Model:** Configures its own temporary Git environment, requiring no prior user configuration or global Git settings.
