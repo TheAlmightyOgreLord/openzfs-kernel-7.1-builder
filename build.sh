@@ -23,12 +23,14 @@ DEPS=(
     kernel-devel kernel-headers
     elfutils-libelf-devel zlib-devel libuuid-devel libblkid-devel
     libtirpc-devel libselinux-devel libudev-devel
-    openssl-devel python3-devel python3-packaging libffi-devel
+    openssl-devel python3-devel python3-packaging libffi-devel python3-cffi
     lz4-devel libzstd-devel
     autoconf automake libtool
     ksh ncompress
     gcc make
     dkms sysstat perl mokutil
+    libattr-devel libcurl-devel
+    libaio-devel
 )
 
 # Fedora 44+ requires explicit python3-setuptools (removed from python3-devel deps)
@@ -36,6 +38,18 @@ if [[ $FEDORA_VERSION -ge 44 ]]; then
     echo "⚠️  Fedora 44+ detected: Adding explicit python3-setuptools dependency..."
     DEPS+=(python3-setuptools)
 fi
+
+# ✅ CI VALIDATION: Ensure critical dependencies are never omitted
+# This prevents regressions where logic accidentally overwrites the DEPS array
+CRITICAL_DEPS=("libaio-devel" "libattr-devel" "libcurl-devel" "python3-cffi")
+echo "🛡️  Validating critical dependencies..."
+for dep in "${CRITICAL_DEPS[@]}"; do
+    if [[ ! " ${DEPS[@]} " =~ " ${dep} " ]]; then
+        echo "❌ FATAL: Critical dependency '${dep}' is missing from DEPS array!"
+        exit 1
+    fi
+done
+echo "✅ All critical dependencies present."
 
 # 1. Prepare Environment
 echo "📦 Installing build dependencies..."
@@ -146,8 +160,6 @@ if grep -q "^%changelog" "$SPEC_FILE"; then
 else
     echo "   - ⚠️ Warning: %changelog section not found in spec file."
 fi
-
-echo "✅ Section 3 Complete. Ready to build."
 
 echo "✅ Section 3 Complete. Ready to build."
 
