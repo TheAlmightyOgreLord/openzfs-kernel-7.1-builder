@@ -86,7 +86,7 @@ git config user.name "OpenZFS Builder"
 git add -A
 git commit -q -m "Initial upstream source"
 
-# 1. Apply OFFICIAL Kernel 7.1 META fix (Commit a35e8d8)
+# 4. Apply OFFICIAL Kernel 7.1 META fix (Commit a35e8d8)
 # Replaces manual sed with the exact upstream change signed by maintainers
 echo "   - Backporting official META fix for Linux 7.1 (Commit a35e8d8)..."
 if ! curl -sSL "https://github.com/openzfs/zfs/commit/a35e8d8.patch" | git apply -; then
@@ -95,7 +95,7 @@ if ! curl -sSL "https://github.com/openzfs/zfs/commit/a35e8d8.patch" | git apply
 fi
 echo "   - ✅ Official META patch applied."
 
-# 2. Apply the REAL fix for Issue #18787 (mmap read underflow)
+# 5. Apply the REAL fix for Issue #18787 (mmap read underflow)
 # Backports commit 223b8bc using git apply for atomic safety
 echo "   - Backporting upstream fix for Issue #18787 (zfs_fillpage underflow)..."
 if ! curl -sSL "https://github.com/openzfs/zfs/commit/223b8bc.patch" | git apply -; then
@@ -116,26 +116,17 @@ rm -rf zfs-${ZFS_VERSION}
 
 echo "   - Source tarball patched and repacked."   
 
-# C. Extract the NOW-PATCHED tarball to run configure and generate dkms.conf
+# 6. Extract the NOW-PATCHED tarball to run configure and generate dkms.conf
 # We extract from the patched SOURCES tarball, not the original WORK_DIR one
 cd "$WORK_DIR"
 tar xzf ~/rpmbuild/SOURCES/zfs-${ZFS_VERSION}.tar.gz
 cd "zfs-${ZFS_VERSION}"
 
-# D. Run configure to generate spec files
-echo "   - Running configure..."
+# 7. Run configure to generate spec files and Makefiles
+echo "⚙️ Running configure..."
 ./configure --with-spec=redhat --without-libunwind
 
-# E. Generate dkms.conf with correct arguments
-echo "   - Generating module/dkms.conf..."
-./scripts/dkms.mkconf -n zfs -v "${ZFS_VERSION}" -c META -f module/dkms.conf
-
-if [ ! -s module/dkms.conf ] || ! grep -q "PACKAGE_NAME=" module/dkms.conf; then
-    echo "❌ FAILED: module/dkms.conf is empty or invalid."
-    exit 1
-fi
-
-# F. Copy the generated spec file
+# 8. Copy the generated spec file
 if [ -f rpm/redhat/zfs.spec ]; then
     cp rpm/redhat/zfs.spec ~/rpmbuild/SPECS/
 elif [ -f rpm/generic/zfs.spec ]; then
@@ -145,14 +136,11 @@ else
     exit 1
 fi
 
-# G. Patch the SPEC file
+# 9. Patch the SPEC file
 echo "   - Patching zfs.spec..."
 SPEC_FILE="$HOME/rpmbuild/SPECS/zfs.spec"
 
-# 1. Disable libunwind (existing fix)
-sed -i 's/%configure/%configure --without-libunwind/' "$SPEC_FILE"
-
-# 2. Inject changelog entry (Required for Fedora 44, clean for 43)
+# 10. Inject changelog entry (Required for Fedora 44, clean for 43)
 # Appends a standard entry to satisfy %source_date_epoch_from_changelog
 if grep -q "^%changelog" "$SPEC_FILE"; then
     sed -i '/^%changelog/a * Mon Aug 03 2026 Automated Build <builder@localhost> - '"$ZFS_VERSION"'-1\n- Automated build for Kernel 7.1.x (Backports: a35e8d8, 223b8bc)' "$SPEC_FILE"
@@ -163,11 +151,7 @@ fi
 
 echo "✅ Section 3 Complete. Ready to build."
 
-# 2. Run configure to generate spec files and Makefiles
-echo "⚙️ Running configure..."
-./configure --with-spec=redhat --without-libunwind
-
-# 3. CRITICAL: Generate dkms.conf
+# 11. CRITICAL: Generate dkms.conf
 echo "   - Generating module/dkms.conf..."
 
 # Ensure we are in the source root for relative paths to work correctly
@@ -189,17 +173,7 @@ fi
 
 echo "   - dkms.conf generated successfully."   
 
-# 4. Copy generated spec file
-if [ -f rpm/redhat/zfs.spec ]; then
-    cp rpm/redhat/zfs.spec ~/rpmbuild/SPECS/
-elif [ -f rpm/generic/zfs.spec ]; then
-    cp rpm/generic/zfs.spec ~/rpmbuild/SPECS/
-else
-    echo "❌ Failed to locate generated zfs.spec"
-    exit 1
-fi
-
-# 4. Build User-Space RPMs
+# 12. Build User-Space RPMs
 echo "🏗️ Building user-space RPMs..."
 rm -rf ~/rpmbuild/BUILD/zfs-*
 
@@ -213,7 +187,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# 4b. Build the DKMS RPM specifically
+# 13. Build the DKMS RPM specifically
 echo "🏗️ Building zfs-dkms RPM..."
 
 # Locate the generated dkms spec file
@@ -245,7 +219,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# 5. Verify and Locate DKMS RPM
+# 14. Verify and Locate DKMS RPM
 echo "🔍 Locating generated RPMs..."
 
 # CRITICAL: zfs-dkms is a noarch package.
@@ -262,14 +236,14 @@ echo "✅ Successfully built: $DKMS_RPM"
 echo "   --- All Generated RPMs ---"
 find ~/rpmbuild/RPMS -name "*.rpm" -type f
 
-# 6. Create Local Repo
+# 15. Create Local Repo
 echo "📦 Setting up local DNF repository..."
 mkdir -p "$REPO_DIR"
 cp ~/rpmbuild/RPMS/x86_64/*.rpm "$REPO_DIR/"
 cp ~/rpmbuild/RPMS/noarch/*.rpm "$REPO_DIR/"
 createrepo_c "$REPO_DIR"
 
-# 7. Configure DNF Priority
+# 16. Configure DNF Priority
 echo "⚙️ Configuring DNF priority..."
 cat > /etc/yum.repos.d/${REPO_NAME}.repo <<EOF
 [${REPO_NAME}]
