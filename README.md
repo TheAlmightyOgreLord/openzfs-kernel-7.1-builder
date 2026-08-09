@@ -38,6 +38,7 @@ To update to a newer version of this patched build:
     sudo dnf -y install zfs zfs-dkms zfs-dracut --repo=zfs-patched-local
     ```
     *   DNF will detect the newer RPMs in your local repo and upgrade seamlessly.
+    *   if the 1st step removes `dkms` as unused, you will need to run `sudo dnf -y install dkms` before re-install in step 2.
     *   **No manual cleanup of `/etc/yum.repos.d/` is required.**   
 
 ## 🛡️ Features
