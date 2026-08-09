@@ -34,7 +34,7 @@ To update to a newer version of this patched build:
     *   It will refresh the DNF metadata to recognize the new version.
 2.  **Reinstall/Upgrade**: Run the standard install command:
     ```bash
-    sudo dnf -y remove zfs zfs-dkms zfs-dracut libnvpair* libuutil* libzfs* libzpool*
+    sudo dnf -y remove zfs zfs-dkms zfs-dracut libnvpair* libuutil* libzfs* libzpool* --setopt protected_packages=
     sudo dnf -y install zfs zfs-dkms zfs-dracut --repo=zfs-patched-local
     ```
     *   DNF will detect the newer RPMs in your local repo and upgrade seamlessly.
