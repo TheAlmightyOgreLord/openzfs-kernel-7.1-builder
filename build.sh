@@ -17,6 +17,7 @@ fi
 cleanup() {
     if [ -d "$WORK_DIR" ]; then
         echo "🧹 Cleaning up temporary build directory: $WORK_DIR"
+	chmod -R +w "$WORK_DIR" 2>/dev/null || true
         rm -rf "$WORK_DIR"
     fi
 }
@@ -285,7 +286,9 @@ EOF
 
 echo "🧹 Cleaning up build environment..."
 cd /
-rm -rf "$WORK_DIR" 
+# Force permissions before deletion to handle read-only .git objects
+chmod -R +w "$WORK_DIR" 2>/dev/null || true
+rm -rf "$WORK_DIR"
 
 echo "✅ SUCCESS!"
 echo "   - Repository created at: $REPO_DIR"
@@ -294,4 +297,4 @@ echo ""
 echo "Next steps:"
 echo "   1. Remove old ZFS and dependencies: dnf remove zfs zfs-dkms zfs-dracut libnvpair* libuutil* libzfs* libzpool* --setopt protected_packages="
 echo "   2. Install from local repo (pulls isolated dependencies): dnf install zfs zfs-dkms zfs-dracut --repo=${REPO_NAME}"
-echo "Note: if the 1st step removes `dkms` as unused, you will need to run `sudo dnf -y install dkms` before re-install in step 2."
+echo "Note: if the 1st step removes \`dkms\` as unused, you will need to run \`sudo dnf -y install dkms\` before re-install in step 2."
