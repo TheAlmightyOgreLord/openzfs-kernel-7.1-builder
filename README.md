@@ -9,7 +9,7 @@ This script **backports official upstream commits** to natively support Kernel 7
 
 *   **Native Kernel 7.1 Support:** Applies **official upstream commit `a35e8d8`** (signed by OpenZFS maintainers Tony Hutter and Rob Norris) to update the `META` file.  This removes the "EXPERIMENTAL" kernel warning and the need for `--enable-linux-experimental`.
 *   **Atomic Patching:** Uses `git apply` instead of `patch` for all changes. This ensures an **all-or-nothing** application: if a patch doesn't fit perfectly, the script aborts safely rather than creating a broken build.
-*   **Critical Bug Fix:** Backports **commit `223b8bc`** to resolve **Issue #18787** (mmap read underflow/memory corruption) present in vanilla 2.4.3 on Kernel 7.1.
+*   **Critical Bug Fixes:** Backports **commit `223b8bc`** (Issue #18787: `mmap` underflow), **commit `027940e`** (Issue #18652: Dedup UBSAN), and **commit `3bd8cef`** (Issue #18883: Resume crash) to ensure stability on Kernel 7.1.   
 *   **Native Async I/O Support:** Explicitly links libaio-devel to enable native asynchronous I/O.
 
     > Impact: Prevents fallback to inefficient POSIX emulation, ensuring maximum throughput and reduced latency for database and VM workloads.
@@ -18,7 +18,7 @@ This script **backports official upstream commits** to natively support Kernel 7
 
     > Impact: Enables granular, per-file SELinux labeling (required for strict security policies) and provides a ~3x performance improvement for metadata-heavy operations compared to directory-based xattrs. For root pools, enable maximum performance by setting ```zfs set xattr=sa <pool/dataset>``` and running ```restorecon -Rv /``` to migrate existing labels to the faster System Attribute format.
 *   **Zero-Trust Model:** Configures its own temporary Git environment, requiring no prior user configuration or global Git settings.
-*   **Native Support for Fedora 44:** (tested in a fresh, updated Fedora 44 Workstation VM)
+*   **Native Support for Fedora 43/44:** Validated on clean installations of Fedora 43 (Kernel 7.1.7-100) and Fedora 44 (Kernel 7.1.7-200), including snapshot-based simulations to ensure reproducibility.   
 
 ## 🚀 Quick Start
 
@@ -80,3 +80,4 @@ This script is designed for **automation-first** environments, enabling secure, 
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+

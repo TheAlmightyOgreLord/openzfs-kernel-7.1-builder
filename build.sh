@@ -3,7 +3,7 @@ set -e
 
 # --- Configuration ---
 ZFS_VERSION="2.4.3"
-WORK_DIR="$HOME/zfs-build-$$"
+WORK_DIR="/root/zfs-build-$$"
 REPO_DIR="/var/lib/zfs-local-repo"
 REPO_NAME="zfs-patched-local"
 
@@ -12,6 +12,15 @@ if [[ $EUID -ne 0 ]]; then
    echo "❌ This script must be run as root (e.g., sudo $0)" 
    exit 1
 fi
+
+# CRITICAL: Guarantee cleanup on EXIT, ERROR, or INTERRUPT (Ctrl+C)
+cleanup() {
+    if [ -d "$WORK_DIR" ]; then
+        echo "🧹 Cleaning up temporary build directory: $WORK_DIR"
+        rm -rf "$WORK_DIR"
+    fi
+}
+trap cleanup EXIT INT TERM ERR
 
 # --- Fedora Version Detection ---
 FEDORA_VERSION=$(rpm -E %fedora)
@@ -58,7 +67,8 @@ dnf install -y "${DEPS[@]}"
 echo "🚀 Starting OpenZFS $ZFS_VERSION build for Kernel 7.1.x..."
 
 mkdir -p "$WORK_DIR" "$REPO_DIR"
-mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+export RPMBUILD_OPT="--topdir $WORK_DIR"
+mkdir -p "$WORK_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
 # 2. Download Official Source
 cd "$WORK_DIR"
@@ -67,14 +77,14 @@ wget -q "https://github.com/openzfs/zfs/releases/download/zfs-${ZFS_VERSION}/zfs
 
 # 3. Prepare RPM Build Environment
 echo "🔧 Preparing source for RPM build..."
-cp "zfs-${ZFS_VERSION}.tar.gz" ~/rpmbuild/SOURCES/
+cp "zfs-${ZFS_VERSION}.tar.gz" "$WORK_DIR/SOURCES/"
 
 # ... (After copying tarball to SOURCES) ...
 
 # CRITICAL FIX: Patch the source tree that rpmbuild will use
 # This ensures the INSTALLED source in /usr/src/ has the correct META file
 echo "   - Patching source tree for RPM build..."
-cd ~/rpmbuild/SOURCES
+cd "$WORK_DIR/SOURCES"
 tar xzf zfs-${ZFS_VERSION}.tar.gz
 cd zfs-${ZFS_VERSION}
 
@@ -104,8 +114,26 @@ if ! curl -sSL "https://github.com/openzfs/zfs/commit/223b8bc.patch" | git apply
 fi
 echo "   - ✅ Issue #18787 fix applied."
 
+# Apply the fix for Issue #18652 (UBSAN negative shift in zbookmark_compare)
+echo "   - Backporting upstream fix for Issue #18652 (UBSAN negative shift in zbookmark_compare)..."
+if ! curl -sSL "https://github.com/openzfs/zfs/commit/027940e.patch" | git apply -; then
+    echo "   - ❌ ERROR: Failed to apply Issue #18652 fix."
+    exit 1
+fi
+echo "   - ✅ Issue #18652 fix applied."
+
+# Apply a critical fix for issue #18883 (zfs send -t [resume] reliability)
+echo "   - Backporting upstream fix for Issue #18883 (zfs send -t [resume] reliability)..."
+if ! curl -sSL "https://github.com/openzfs/zfs/commit/3bd8cef.patch" | git apply -; then
+    echo "   - ❌ ERROR: Failed to apply Issue #18883 fix."
+    exit 1
+fi
+echo "   - ✅ Issue #18883 fix applied."
+
 # Cleanup temporary git data (optional, keeps source tree clean for rpmbuild)
 rm -rf .git
+sync
+sleep 1
 
 echo "   - ✅ Source tree successfully patched with upstream commits."   
 
@@ -119,7 +147,7 @@ echo "   - Source tarball patched and repacked."
 # 6. Extract the NOW-PATCHED tarball to run configure and generate dkms.conf
 # We extract from the patched SOURCES tarball, not the original WORK_DIR one
 cd "$WORK_DIR"
-tar xzf ~/rpmbuild/SOURCES/zfs-${ZFS_VERSION}.tar.gz
+tar xzf "$WORK_DIR/SOURCES/zfs-${ZFS_VERSION}.tar.gz"
 cd "zfs-${ZFS_VERSION}"
 
 # 7. Run configure to generate spec files and Makefiles
@@ -128,9 +156,9 @@ echo "⚙️ Running configure..."
 
 # 8. Copy the generated spec file
 if [ -f rpm/redhat/zfs.spec ]; then
-    cp rpm/redhat/zfs.spec ~/rpmbuild/SPECS/
+    cp rpm/redhat/zfs.spec "$WORK_DIR/SPECS/"
 elif [ -f rpm/generic/zfs.spec ]; then
-    cp rpm/generic/zfs.spec ~/rpmbuild/SPECS/
+    cp rpm/generic/zfs.spec "$WORK_DIR/SPECS/"
 else
     echo "❌ zfs.spec not found after configure"
     exit 1
@@ -138,15 +166,28 @@ fi
 
 # 9. Patch the SPEC file
 echo "   - Patching zfs.spec..."
-SPEC_FILE="$HOME/rpmbuild/SPECS/zfs.spec"
+SPEC_FILE="$WORK_DIR/SPECS/zfs.spec"
 
-# 10. Inject changelog entry (Required for Fedora 44, clean for 43)
-# Appends a standard entry to satisfy %source_date_epoch_from_changelog
+# 10. Inject changelog entry (Robust Method)
+CHANGELOG_ENTRY="* Mon Aug 10 2026 Automated Build <builder@localhost> - ${ZFS_VERSION}-1
+- Automated build for Kernel 7.1.x (Backports: a35e8d8, 223b8bc, 027940e, 3bd8cef)"
+
 if grep -q "^%changelog" "$SPEC_FILE"; then
-    sed -i '/^%changelog/a * Mon Aug 03 2026 Automated Build <builder@localhost> - '"$ZFS_VERSION"'-1\n- Automated build for Kernel 7.1.x (Backports: a35e8d8, 223b8bc)' "$SPEC_FILE"
-    echo "   - Injected changelog entry for reproducible builds."
+    # Case A: Section exists -> Insert after the %changelog line
+    sed -i "/^%changelog/a $CHANGELOG_ENTRY" "$SPEC_FILE"
+    echo "   - ✅ Injected changelog entry into existing section."
 else
-    echo "   - ⚠️ Warning: %changelog section not found in spec file."
+    # Case B: Section missing -> Append to end of file (Required for Fedora 44)
+    echo "" >> "$SPEC_FILE"
+    echo "%changelog" >> "$SPEC_FILE"
+    echo "$CHANGELOG_ENTRY" >> "$SPEC_FILE"
+    echo "   - ✅ Created new %changelog section (Required for Fedora 44)."
+fi
+
+# Verify the fix worked
+if ! grep -q "Automated Build" "$SPEC_FILE"; then
+    echo "   ❌ CRITICAL: Changelog injection failed. Build will likely fail."
+    exit 1
 fi
 
 echo "✅ Section 3 Complete. Ready to build."
@@ -171,15 +212,14 @@ if [ ! -s module/dkms.conf ] || ! grep -q "PACKAGE_NAME=" module/dkms.conf; then
     exit 1
 fi
 
-echo "   - dkms.conf generated successfully."   
+echo "   - dkms.conf generated successfully."
+
+RPMBUILD_CMD=(rpmbuild --define "_topdir $WORK_DIR")
 
 # 12. Build User-Space RPMs
 echo "🏗️ Building user-space RPMs..."
-rm -rf ~/rpmbuild/BUILD/zfs-*
-
-rpmbuild -bb ~/rpmbuild/SPECS/zfs.spec \
+"${RPMBUILD_CMD[@]}" -bb "$WORK_DIR/SPECS/zfs.spec" \
     --define "with_utils 1" \
-    --define "_topdir $HOME/rpmbuild" \
     --nodeps
 
 if [ $? -ne 0 ]; then
@@ -190,60 +230,49 @@ fi
 # 13. Build the DKMS RPM specifically
 echo "🏗️ Building zfs-dkms RPM..."
 
-# Locate the generated dkms spec file
+# A. Locate the generated dkms spec file
 if [ -f rpm/redhat/zfs-dkms.spec ]; then
-    DKMS_SPEC="rpm/redhat/zfs-dkms.spec"
+    DKMS_SPEC_SRC="rpm/redhat/zfs-dkms.spec"
 elif [ -f rpm/generic/zfs-dkms.spec ]; then
-    DKMS_SPEC="rpm/generic/zfs-dkms.spec"
+    DKMS_SPEC_SRC="rpm/generic/zfs-dkms.spec"
 else
     echo "❌ zfs-dkms.spec not found. DKMS support not enabled in configure."
     exit 1
 fi
 
-# Copy to SPECS dir (overwrite if exists)
-cp "$DKMS_SPEC" ~/rpmbuild/SPECS/zfs-dkms.spec
+# B. Copy to WORK_DIR/SPECS
+DKMS_SPEC_DEST="$WORK_DIR/SPECS/zfs-dkms.spec"
+cp "$DKMS_SPEC_SRC" "$DKMS_SPEC_DEST"
 
-# CRITICAL: Ensure the source tarball is in SOURCES for the dkms build
-# The dkms spec expects to unpack the source to /usr/src/zfs-<version>
-if [ ! -f ~/rpmbuild/SOURCES/zfs-${ZFS_VERSION}.tar.gz ]; then
-    cp "$WORK_DIR/zfs-${ZFS_VERSION}.tar.gz" ~/rpmbuild/SOURCES/
+# C. CRITICAL: Inject %changelog if missing (Required for Fedora 44)
+# OpenZFS upstream specs often omit this, causing build failures on modern Fedora
+if ! grep -q "^%changelog" "$DKMS_SPEC_DEST"; then
+    echo "   - Injecting missing %changelog section into DKMS spec..."
+    {
+        echo ""
+        echo "%changelog"
+        echo "* Mon Aug 03 2026 Automated Build <builder@localhost> - ${ZFS_VERSION}-1"
+        echo "- Automated DKMS build with upstream backports"
+    } >> "$DKMS_SPEC_DEST"
 fi
 
-# Build the DKMS RPM
-rpmbuild -bb ~/rpmbuild/SPECS/zfs-dkms.spec \
-    --define "_topdir $HOME/rpmbuild" \
-    --nodeps
-
-if [ $? -ne 0 ]; then
+# D. Build using the ARRAY variable (Ensures _topdir is correctly parsed)
+# This forces rpmbuild to use $WORK_DIR, preventing fallback to /root/rpmbuild
+if ! "${RPMBUILD_CMD[@]}" -bb "$DKMS_SPEC_DEST" --nodeps; then
     echo "❌ zfs-dkms RPM build failed."
     exit 1
 fi
 
-# 14. Verify and Locate DKMS RPM
-echo "🔍 Locating generated RPMs..."
+echo "✅ zfs-dkms RPM built successfully in $WORK_DIR/RPMS/noarch/"
 
-# CRITICAL: zfs-dkms is a noarch package.
-DKMS_RPM=$(ls ~/rpmbuild/RPMS/noarch/zfs-dkms-${ZFS_VERSION}-*.noarch.rpm 2>/dev/null | head -n 1)
-
-if [ -z "$DKMS_RPM" ]; then
-    echo "❌ zfs-dkms RPM not found in noarch directory."
-    echo "   --- Contents of ~/rpmbuild/RPMS/noarch/ ---"
-    ls -lh ~/rpmbuild/RPMS/noarch/ 2>/dev/null || echo "   (Directory empty or missing)"
-    exit 1
-fi
-
-echo "✅ Successfully built: $DKMS_RPM"
-echo "   --- All Generated RPMs ---"
-find ~/rpmbuild/RPMS -name "*.rpm" -type f
-
-# 15. Create Local Repo
+# 14. Create Local Repo
 echo "📦 Setting up local DNF repository..."
 mkdir -p "$REPO_DIR"
-cp ~/rpmbuild/RPMS/x86_64/*.rpm "$REPO_DIR/"
-cp ~/rpmbuild/RPMS/noarch/*.rpm "$REPO_DIR/"
+cp "$WORK_DIR/RPMS/x86_64/"*.rpm "$REPO_DIR/"
+cp "$WORK_DIR/RPMS/noarch/"*.rpm "$REPO_DIR/"
 createrepo_c "$REPO_DIR"
 
-# 16. Configure DNF Priority
+# 15. Configure DNF Priority
 echo "⚙️ Configuring DNF priority..."
 cat > /etc/yum.repos.d/${REPO_NAME}.repo <<EOF
 [${REPO_NAME}]
@@ -254,8 +283,8 @@ gpgcheck=0
 priority=10
 EOF
 
-# Cleanup
-cd ..
+echo "🧹 Cleaning up build environment..."
+cd /
 rm -rf "$WORK_DIR" 
 
 echo "✅ SUCCESS!"
