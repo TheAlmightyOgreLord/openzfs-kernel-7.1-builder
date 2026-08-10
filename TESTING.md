@@ -8,7 +8,7 @@ This document details the fault-injection testing performed on the critical stab
 | **Bookmark Sorting / UBSAN** | #18652 (Commit `027940e`) | Fixes undefined behavior (negative shift) and mis-sorting of "marker" bookmarks during scan prefetch. Prevents potential logic errors in high-churn dedup environments. | **0 Errors** after 5 rounds of high-churn I/O + Scrub | ✅ PASS |
 | **Send/Resume** | #18883 (Commit `3bd8cef`) | Kernel Panic / Segfault (Use-After-Free) | **Stable**. Pool remains ONLINE. Command fails safely. | ✅ STABLE |
 
-### 3. Historical Validation (Pre-Refactor)
+### Historical Validation (Pre-Refactor)
 | Component | Issue | Methodology | Result | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | **mmap/truncate** | #18787 (Commit `223b8bc`) | 30+ min concurrent `mmap`/`truncate` stress test (VM no longer available).  | **Survived**. No `zfs_fillpage` underflow or KASAN errors observed.  | ✅ PASS (Historical) |
