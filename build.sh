@@ -33,7 +33,8 @@ DEPS=(
     kernel-devel kernel-headers
     elfutils-libelf-devel zlib-devel libuuid-devel libblkid-devel
     libtirpc-devel libselinux-devel libudev-devel
-    openssl-devel python3-devel python3-packaging libffi-devel python3-cffi
+    openssl-devel python3-devel python3-packaging python3-setuptools 
+	libffi-devel python3-cffi
     lz4-devel libzstd-devel
     autoconf automake libtool
     ksh ncompress
