@@ -87,6 +87,7 @@ cp "zfs-${ZFS_VERSION}.tar.gz" "$WORK_DIR/SOURCES/"
 echo "   - Patching source tree for RPM build..."
 cd "$WORK_DIR/SOURCES"
 tar xzf zfs-${ZFS_VERSION}.tar.gz
+chown -R "${USER}" "$WORK_DIR"
 cd zfs-${ZFS_VERSION}
 
 # Initialize a temporary git repo to allow 'git apply' (cleaner than 'patch')
