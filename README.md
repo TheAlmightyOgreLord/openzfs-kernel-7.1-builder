@@ -1,3 +1,17 @@
+
+> ⚡ **Bleeding Edge:** For **OpenZFS 2.4.4 + Kernel 7.2.0** support,
+> use the [`zfs-2.4.4-k7.2`](https://github.com/TheAlmightyOgreLord/openzfs-kernel-7.1-builder/tree/zfs-2.4.4-k7.2) branch.
+>
+> ```bash
+> git clone --branch zfs-2.4.4-k7.2 --single-branch --depth 1 \
+>   https://github.com/TheAlmightyOgreLord/openzfs-kernel-7.1-builder.git
+> ```
+>
+> This branch builds from [Tony Hutter's `zfs-2.4.4-hutter`](https://github.com/tonyhutter/zfs/tree/zfs-2.4.4-hutter)
+> against Kernel 7.2.0 (via `@kernel-vanilla` COPR). Unofficial, community-maintained.
+
+---
+
 # OpenZFS Builder (Fedora 43/44 + Kernel 7.1.x)
 
 A professional, self-contained build script for **OpenZFS 2.4.3** that creates an easy-to-manage offline DNF repo. 
