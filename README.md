@@ -8,7 +8,7 @@
 > ```
 >
 > This branch builds from [Tony Hutter's `zfs-2.4.4-hutter`](https://github.com/tonyhutter/zfs/tree/zfs-2.4.4-hutter)
-> against Kernel 7.2.0 (via `@kernel-vanilla` COPR). Unofficial, community-maintained.
+> Tested in a VM against Kernel 7.2.0 ahead of official 7.2.x drop (via `@kernel-vanilla` COPR). Unofficial, community-maintained.
 
 ---
 
