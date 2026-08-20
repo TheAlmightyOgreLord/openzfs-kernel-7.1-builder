@@ -1,15 +1,16 @@
-# OpenZFS Builder (Fedora 43/44 + Kernel 7.1.x)
+# OpenZFS Builder (Fedora 43/44 + Kernel 7.2.x)
 
-A professional, self-contained build script for **OpenZFS 2.4.3** that creates an easy-to-manage offline DNF repo. 
-Hardcoded and rigorously tested for **OpenZFS 2.4.3** on **Fedora 43/44** with **Linux Kernel 7.1.x**.
+## Source
+This build script uses the [`zfs-2.4.4-hutter`](https://github.com/tonyhutter/zfs/tree/zfs-2.4.4-hutter)
+branch from [Tony Hutter's fork](https://github.com/tonyhutter/zfs) as its source.
+This is an **unofficial, community-maintained** build script. It is not endorsed
+by Tony Hutter, the OpenZFS project, or Klara Systems.
 
-This script **backports official upstream commits** to natively support Kernel 7.1, eliminating the need for manual patches or experimental build flags.
+This script runs as sudo, builds openzfs v2.4.4-hutter against kernel 7.2.x within its own sandbox, creates a prioritized local dnf repo, and cleans up afterwards.
 
 ## 🔧 Core Improvements (August 2026)
 
-*   **Native Kernel 7.1 Support:** Applies **official upstream commit `a35e8d8`** (signed by OpenZFS maintainers Tony Hutter and Rob Norris) to update the `META` file.  This removes the "EXPERIMENTAL" kernel warning and the need for `--enable-linux-experimental`.
-*   **Atomic Patching:** Uses `git apply` instead of `patch` for all changes. This ensures an **all-or-nothing** application: if a patch doesn't fit perfectly, the script aborts safely rather than creating a broken build.
-*   **Critical Bug Fixes:** Backports **commit `223b8bc`** (Issue #18787: `mmap` underflow), **commit `027940e`** (Issue #18652: Dedup UBSAN), and **commit `3bd8cef`** (Issue #18883: Resume crash) to ensure stability on Kernel 7.1.   
+*   **Native Kernel 7.2 Support:** Uses Tony Hutter's 2.4.4 upstream branch for kernel 7.2.x support
 *   **Native Async I/O Support:** Explicitly links libaio-devel to enable native asynchronous I/O.
 
     > Impact: Prevents fallback to inefficient POSIX emulation, ensuring maximum throughput and reduced latency for database and VM workloads.
@@ -17,8 +18,8 @@ This script **backports official upstream commits** to natively support Kernel 7
 *   **Enterprise SELinux Integration:** Explicitly links libattr-devel and allows the use of xattr=sa (System Attributes).
 
     > Impact: Enables granular, per-file SELinux labeling (required for strict security policies) and provides a ~3x performance improvement for metadata-heavy operations compared to directory-based xattrs. For root pools, enable maximum performance by setting ```zfs set xattr=sa <pool/dataset>``` and running ```restorecon -Rv /``` to migrate existing labels to the faster System Attribute format.
-*   **Zero-Trust Model:** Configures its own temporary Git environment, requiring no prior user configuration or global Git settings.
-*   **Native Support for Fedora 43/44:** Validated on clean installations of Fedora 43 (Kernel 7.1.7-100) and Fedora 44 (Kernel 7.1.7-200), including snapshot-based simulations to ensure reproducibility.   
+*   **Zero-Trust Model:** Minimal, builds from source, you trust your own .rpm's locally built on your machine.
+*   **Native Support for Fedora 43/44:** Validated on clean installations of Fedora 43 (Kernel 7.2.0-259.vanilla.fc43.x86_64). Fedora 44 is not tested yet, use at your own risk), including snapshot-based simulations to ensure reproducibility.
 
 ## 🚀 Quick Start
 
@@ -53,11 +54,11 @@ To update to a newer version of this patched build:
 
 ## ⚠️ Constraints
 
-- OS: Fedora 43 and Fedora 44 (Untested on other distros)
+- OS: Fedora 43 and Fedora 44 (Untested on Fedora 44 and other distros)
 
-- Kernel: 7.1.x only
+- Kernel: 7.1.x - 7.2.x
 
-- Source: OpenZFS 2.4.3 (with official 2.4.4 backports)
+- Source: OpenZFS 2.4.4 (Tony Hutter's upstream branch)
 
 ## 🏭 Enterprise & CI/CD Integration
 
@@ -67,10 +68,9 @@ This script is designed for **automation-first** environments, enabling secure, 
 *   **SBOM Ready:** The resulting RPMs contain complete dependency metadata (`Requires`/`Provides`) auto-generated from the compiled binaries. Standard enterprise tools (e.g., **Syft**, **Trivy**, **Anchore**) can instantly scan these RPMs to generate compliant **CycloneDX** or **SPDX** Software Bill of Materials (SBOM) artifacts. 
 *   **Secure Boot & UKI:** Generates modules compatible with Secure Boot and Unified Kernel Image (UKI) workflows. Integrates seamlessly with CI/CD pipelines to sign modules using organization-held Machine Owner Keys (MOK). 
 *   **Immutable Deployment:** Adopt a **"Build Once, Deploy Many"** strategy. Build the RPM in a CI pipeline (GitHub Actions, Jenkins, GitLab CI) and deploy the *exact same binary* across your entire cluster, ensuring bit-for-bit consistency and auditability.
-*   **Provenance:** Documents exact upstream commits (`a35e8d8`, `223b8bc`) in the build process, satisfying **NIST SSDF** provenance requirements and enabling easy audit trails for regulated environments.
 
 > **Example CI/CD Workflow:**
-> 1. Trigger: Initiate build on new Kernel 7.1.x release (or when updating backport commits in the script).
+> 1. Trigger: Initiate build on new Kernel 7.2.x release.
 > 2. Build: CI runs build.sh in an isolated container/VM, which automatically fetches source, applies patches, and builds RPMs.
 > 3. Sign: CI signs RPMs and modules with organization Secure Boot keys.
 > 4. Publish: CI pushes signed RPMs to a private DNF repository (e.g., GitHub Packages, Artifactory).
