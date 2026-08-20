@@ -19,12 +19,27 @@ This script runs as sudo, builds openzfs v2.4.4-hutter against kernel 7.2.x with
 
     > Impact: Enables granular, per-file SELinux labeling (required for strict security policies) and provides a ~3x performance improvement for metadata-heavy operations compared to directory-based xattrs. For root pools, enable maximum performance by setting ```zfs set xattr=sa <pool/dataset>``` and running ```restorecon -Rv /``` to migrate existing labels to the faster System Attribute format.
 *   **Zero-Trust Model:** Minimal, builds from source, you trust your own .rpm's locally built on your machine.
-*   **Native Support for Fedora 43/44:** Validated on clean installations of Fedora 43 (Kernel 7.2.0-259.vanilla.fc43.x86_64). Fedora 44 is not tested yet, use at your own risk), including snapshot-based simulations to ensure reproducibility.
+*   **Native Support for Fedora 43/44:** Validated on clean installations of Fedora 43 with Kernel 7.2.0-259.vanilla.fc43.x86_64. (**Fedora 44 is not tested yet, use at your own risk**), including snapshot-based simulations to ensure reproducibility.
 
 ## 🚀 Quick Start
 
+## Prerequisites: Install Kernel 7.2.0 on Fedora 43
+
+Fedora 43 stable is currently on **7.1.8-100**, which lacks critical
+Bluetooth CVE fixes (CVE-2026-68189, CVE-2026-1001). Kernel **7.2.0**
+(released Aug 16, 2026) patches all of them.
+
+### 1. Enable the Kernel Vanilla COPR
+
 ```bash
-git clone https://github.com/TheAlmightyOgreLord/openzfs-kernel-7.1-builder.git
+sudo dnf -y copr enable @kernel-vanilla/stable
+
+sudo dnf -y install kernel-7.2.0 kernel-devel-7.2.0 kernel-headers-7.2.0
+```
+> Note: May require signing kernel using pesign to get it to boot
+
+```bash
+git clone --branch zfs-2.4.4-k7.2 --single-branch --depth 1 https://github.com/TheAlmightyOgreLord/openzfs-kernel-7.1-builder.git
 cd openzfs-kernel-7.1-builder
 sudo ./build.sh
 ```
