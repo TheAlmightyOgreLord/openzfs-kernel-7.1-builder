@@ -29,7 +29,8 @@ Fedora 43 stable is currently on **7.1.8-100**, which lacks critical
 Bluetooth CVE fixes (CVE-2026-68189, CVE-2026-1001). Kernel **7.2.0**
 (released Aug 16, 2026) patches all of them.
 
-### 1. Enable the Kernel Vanilla COPR
+### 1. Enable the Kernel Vanilla COPR 
+> Be aware you're trusting a copr repo, for true zero-trust build from source or wait for 7.2.x to drop
 
 ```bash
 sudo dnf -y copr enable @kernel-vanilla/stable
@@ -38,6 +39,7 @@ sudo dnf -y install kernel-7.2.0 kernel-devel-7.2.0 kernel-headers-7.2.0
 ```
 > Note: May require signing kernel using pesign to get it to boot
 
+### 2. Clone This Branch
 ```bash
 git clone --branch zfs-2.4.4-k7.2 --single-branch --depth 1 https://github.com/TheAlmightyOgreLord/openzfs-kernel-7.1-builder.git
 cd openzfs-kernel-7.1-builder
