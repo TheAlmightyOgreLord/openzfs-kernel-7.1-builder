@@ -23,9 +23,9 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM ERR
 
-# --- Fedora Version Detection ---
-FEDORA_VERSION=$(rpm -E %fedora)
-echo "🔍 Detected Fedora version: $FEDORA_VERSION"
+# Detect Distro ID
+source /etc/os-release
+DISTRO_ID=${ID,,} # Convert to lowercase
 
 # Prepare Dependency List
 DEPS=(
@@ -43,9 +43,20 @@ DEPS=(
     libaio-devel
 )
 
-# Fedora 44+ requires explicit python3-setuptools (removed from python3-devel deps)
-if [[ $FEDORA_VERSION -ge 44 ]]; then
-    echo "⚠️  Fedora 44+ detected: Adding explicit python3-setuptools dependency..."
+if [[ "$DISTRO_ID" == "fedora" ]]; then
+    FEDORA_VERSION=$(rpm -E %fedora)
+    echo "🔍 Detected Fedora version: $FEDORA_VERSION"
+    
+    # Fedora 44+ requires explicit python3-setuptools
+    if [[ $FEDORA_VERSION -ge 44 ]]; then
+        echo "⚠️  Fedora 44+ detected: Adding explicit python3-setuptools dependency..."
+        DEPS+=(python3-setuptools)
+    fi
+    # Fedora <=43: Relies on transitive dep from python3-devel (Correct)
+else
+    # RHEL, CentOS, Alma, Rocky, etc. ALWAYS need explicit setuptools
+    # They never had it as a transitive dependency in recent versions
+    echo "ℹ️  Non-Fedora RPM distro detected ($DISTRO_ID): Adding explicit python3-setuptools dependency..."
     DEPS+=(python3-setuptools)
 fi
 
@@ -86,7 +97,7 @@ cp "zfs-${ZFS_VERSION}.tar.gz" "$WORK_DIR/SOURCES/"
 # This ensures the INSTALLED source in /usr/src/ has the correct META file
 echo "   - Patching source tree for RPM build..."
 cd "$WORK_DIR/SOURCES"
-tar xzf zfs-${ZFS_VERSION}.tar.gz
+tar xzf zfs-${ZFS_VERSION}.tar.gz --no-same-owner
 cd zfs-${ZFS_VERSION}
 
 # Initialize a temporary git repo to allow 'git apply' (cleaner than 'patch')
