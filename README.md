@@ -67,11 +67,12 @@ To update to a newer version of this patched build:
 
 ## ⚠️ Constraints
 
-- OS: Fedora 43 and Fedora 44 (Untested on other distros)
+- **OS:** Fedora 43/44 (Fully validated). Also supports **RHEL 9**, **CentOS Stream 9**, **AlmaLinux 9**, **Rocky Linux 9**, and **Oracle Linux 9** via automatic distro detection.
+  - *Logic verified for all DNF-based RPM distributions.*
 
-- Kernel: 7.1.x only
+- **Kernel:** 7.1.x only
 
-- Source: OpenZFS 2.4.3 (with official 2.4.4 backports)
+- **Source:** OpenZFS 2.4.3 (with official 2.4.4 backports)   
 
 ## 🏭 Enterprise & CI/CD Integration
 
