@@ -7,7 +7,7 @@ ZFS_BRANCH="${ZFS_BRANCH:-zfs-${ZFS_VERSION}}" # Defaults to tag, but can be ove
 WORK_DIR="/root/zfs-build-$$"
 REPO_DIR="/var/lib/zfs-local-repo"
 REPO_NAME="zfs-patched-local"
-BUILD_DATE=$(date -R)
+BUILD_DATE=$(LC_ALL=C date "+%a %b %d %Y")
 BUILD_USER="${USER:-$(whoami)}"
 
 # Check for root
@@ -119,45 +119,14 @@ sh autogen.sh
 echo "⚙️ Running configure..."
 ./configure --with-spec=redhat --without-libunwind --with-config=srpm
 
+echo "" >> zfs.spec
+echo "%changelog" >> zfs.spec
+echo "* ${BUILD_DATE} ${BUILD_USER} <${BUILD_USER}@localhost> - ${ZFS_VERSION}-1" >> zfs.spec
+echo "- Automated build from OpenZFS ${ZFS_BRANCH} (official ${ZFS_VERSION} release)" >> zfs.spec
+
 make dist-gzip
 
 mv zfs-${ZFS_VERSION}.tar.gz "$WORK_DIR/SOURCES/"
-
-# 6. Copy the generated spec file
-if [ -f rpm/redhat/zfs.spec ]; then
-    cp rpm/redhat/zfs.spec "$WORK_DIR/SPECS/"
-elif [ -f rpm/generic/zfs.spec ]; then
-    cp rpm/generic/zfs.spec "$WORK_DIR/SPECS/"
-else
-    echo "❌ zfs.spec not found after configure"
-    exit 1
-fi
-
-# 7. Patch the SPEC file
-echo "   - Patching zfs.spec..."
-SPEC_FILE="$WORK_DIR/SPECS/zfs.spec"
-
-# 8. Inject changelog entry (Robust Method)
-CHANGELOG_ENTRY="* ${BUILD_DATE} ${BUILD_USER} <${BUILD_USER}@localhost> - ${ZFS_VERSION}-1
-- Automated build from OpenZFS ${ZFS_BRANCH} (official ${ZFS_VERSION} release)"
-
-if grep -q "^%changelog" "$SPEC_FILE"; then
-    # Case A: Section exists -> Insert after the %changelog line
-    sed -i "/^%changelog/a $CHANGELOG_ENTRY" "$SPEC_FILE"
-    echo "   - ✅ Injected changelog entry into existing section."
-else
-    # Case B: Section missing -> Append to end of file (Required for Fedora 44)
-    echo "" >> "$SPEC_FILE"
-    echo "%changelog" >> "$SPEC_FILE"
-    echo "$CHANGELOG_ENTRY" >> "$SPEC_FILE"
-    echo "   - ✅ Created new %changelog section (Required for Fedora 44)."
-fi
-
-# Verify the fix worked
-if ! grep -q "Automated Build" "$SPEC_FILE"; then
-    echo "   ❌ CRITICAL: Changelog injection failed. Build will likely fail."
-    exit 1
-fi
 
 echo "✅ Section 3 Complete. Ready to build."
 
@@ -166,7 +135,7 @@ echo "🏗️ Building all RPMs (utils + dkms)..."
 make -j1 rpm-utils rpm-dkms
 
 
-# 9. Extract the actual RPM paths from make output
+# 6. Extract the actual RPM paths from make output
 echo "📦 Collecting RPMs..."
 mkdir -p "$REPO_DIR"
 # RPMs are in the source directory where make was run
@@ -179,7 +148,7 @@ fi
 find "$WORK_DIR" -name "*.rpm" -newer "$WORK_DIR/SOURCES/zfs-${ZFS_VERSION}.tar.gz" \
     -exec cp {} "$REPO_DIR/" \; 2>/dev/null
 
-# 10. Verify
+# 7. Verify
 RPM_COUNT=$(ls -1 "$REPO_DIR"/*.rpm 2>/dev/null | wc -l)
 if [ "$RPM_COUNT" -eq 0 ]; then
     echo "❌ No RPMs found. Searching /tmp..."
@@ -192,7 +161,7 @@ echo "   - $RPM_COUNT RPMs in $REPO_DIR"
 
 createrepo_c "$REPO_DIR"   
 
-# 11. Configure DNF Priority
+# 8. Configure DNF Priority
 echo "⚙️ Configuring DNF priority..."
 cat > /etc/yum.repos.d/${REPO_NAME}.repo <<EOF
 [${REPO_NAME}]
