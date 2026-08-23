@@ -7,6 +7,8 @@ ZFS_BRANCH="${ZFS_BRANCH:-zfs-${ZFS_VERSION}}" # Defaults to tag, but can be ove
 WORK_DIR="/root/zfs-build-$$"
 REPO_DIR="/var/lib/zfs-local-repo"
 REPO_NAME="zfs-patched-local"
+BUILD_DATE=$(date -R)
+BUILD_USER="${USER:-$(whoami)}"
 
 # Check for root
 if [[ $EUID -ne 0 ]]; then
@@ -119,7 +121,7 @@ echo "⚙️ Running configure..."
 
 make dist-gzip
 
-mv zfs-2.4.4.tar.gz "$WORK_DIR/SOURCES/"
+mv zfs-${ZFS_VERSION}.tar.gz "$WORK_DIR/SOURCES/"
 
 # 6. Copy the generated spec file
 if [ -f rpm/redhat/zfs.spec ]; then
@@ -136,8 +138,8 @@ echo "   - Patching zfs.spec..."
 SPEC_FILE="$WORK_DIR/SPECS/zfs.spec"
 
 # 8. Inject changelog entry (Robust Method)
-CHANGELOG_ENTRY="* Thu Aug 22 2026 Automated Build <builder@localhost> - ${ZFS_VERSION}-1
-- Automated build for Kernel 7.2.x (zfs-${ZFS_VERSION}-stable branch)"
+CHANGELOG_ENTRY="* ${BUILD_DATE} ${BUILD_USER} <${BUILD_USER}@localhost> - ${ZFS_VERSION}-1
+- Automated build from OpenZFS ${ZFS_BRANCH} (official ${ZFS_VERSION} release)"
 
 if grep -q "^%changelog" "$SPEC_FILE"; then
     # Case A: Section exists -> Insert after the %changelog line

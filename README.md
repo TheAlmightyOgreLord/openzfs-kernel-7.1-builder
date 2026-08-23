@@ -18,13 +18,6 @@ ZFS_VERSION="2.4.4"
 ZFS_BRANCH="zfs-2.4.4"   # or: "zfs-2.4-release", "master", etc.   
 
 ```
-## Source
-This build script uses the [`zfs-2.4.4-hutter`](https://github.com/tonyhutter/zfs/tree/zfs-2.4.4-hutter)
-branch from [Tony Hutter's fork](https://github.com/tonyhutter/zfs) as its source.
-This is an **unofficial, community-maintained** build script. It is not endorsed
-by Tony Hutter, the OpenZFS project, or Klara Systems.
-
-This script runs as sudo, builds OpenZFS v2.4.4-release against kernel 7.1.x - 7.2.x within its own sandbox, creates a prioritized local dnf repo, and cleans up afterwards.
 
 ## 🔧 Core Improvements (August 2026)
 
