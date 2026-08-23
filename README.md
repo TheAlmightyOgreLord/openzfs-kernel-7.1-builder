@@ -1,29 +1,27 @@
+# OpenZFS Builder (DNF Distributions + Kernel 7.1.x - 7.2.x)
 
-> ⚡ **Bleeding Edge:** For **OpenZFS 2.4.4 + Kernel 7.2.0** support,
-> use the [`zfs-2.4.4-k7.2`](https://github.com/TheAlmightyOgreLord/openzfs-kernel-7.1-builder/tree/zfs-2.4.4-k7.2) branch.
->
-> ```bash
-> git clone --branch zfs-2.4.4-k7.2 --single-branch --depth 1 \
->   https://github.com/TheAlmightyOgreLord/openzfs-kernel-7.1-builder.git
-> ```
->
-> This branch builds from [Tony Hutter's `zfs-2.4.4-hutter`](https://github.com/tonyhutter/zfs/tree/zfs-2.4.4-hutter)
-> Tested in a VM against Kernel 7.2.0 ahead of official 7.2.x drop (via `@kernel-vanilla` COPR). Unofficial, community-maintained.
+This build script clones the [`zfs-2.4.4`](https://github.com/openzfs/zfs/releases/tag/zfs-2.4.4)
+tag from the [official OpenZFS repository](https://github.com/openzfs/zfs) by default.
+It is an **unofficial, community-maintained** build script. It is not endorsed
+by the OpenZFS project or Klara Systems.
 
----
+The script runs as sudo (self-checks to avoid confusion), builds OpenZFS from source within its own `rpmbuild`
+sandbox, creates a prioritized local dnf repo, and cleans up afterwards.
 
-# OpenZFS Builder (Fedora 43/44 + Kernel 7.1.x)
+## ⚙️ Dynamic Versioning
 
-A professional, self-contained build script for **OpenZFS 2.4.3** that creates an easy-to-manage offline DNF repo. 
-Hardcoded and rigorously tested for **OpenZFS 2.4.3** on **Fedora 43/44** with **Linux Kernel 7.1.x**.
+By default, the script builds **OpenZFS 2.4.4**. To build any other version
+or branch, edit the top of `build.sh`:
 
-This script **backports official upstream commits** to natively support Kernel 7.1, eliminating the need for manual patches or experimental build flags.
+```bash
+ZFS_VERSION="2.4.4"
+ZFS_BRANCH="zfs-2.4.4"   # or: "zfs-2.4-release", "master", etc.   
+
+```
 
 ## 🔧 Core Improvements (August 2026)
 
-*   **Native Kernel 7.1 Support:** Applies **official upstream commit `a35e8d8`** (signed by OpenZFS maintainers Tony Hutter and Rob Norris) to update the `META` file.  This removes the "EXPERIMENTAL" kernel warning and the need for `--enable-linux-experimental`.
-*   **Atomic Patching:** Uses `git apply` instead of `patch` for all changes. This ensures an **all-or-nothing** application: if a patch doesn't fit perfectly, the script aborts safely rather than creating a broken build.
-*   **Critical Bug Fixes:** Backports **commit `223b8bc`** (Issue #18787: `mmap` underflow), **commit `027940e`** (Issue #18652: Dedup UBSAN), and **commit `3bd8cef`** (Issue #18883: Resume crash) to ensure stability on Kernel 7.1.   
+*   **Native Kernel 7.1 & 7.2 Support:** Uses OpenZFS 2.4.4 upstream release branch for kernel 7.1.x - 7.2.x support
 *   **Native Async I/O Support:** Explicitly links libaio-devel to enable native asynchronous I/O.
 
     > Impact: Prevents fallback to inefficient POSIX emulation, ensuring maximum throughput and reduced latency for database and VM workloads.
@@ -31,8 +29,8 @@ This script **backports official upstream commits** to natively support Kernel 7
 *   **Enterprise SELinux Integration:** Explicitly links libattr-devel and allows the use of xattr=sa (System Attributes).
 
     > Impact: Enables granular, per-file SELinux labeling (required for strict security policies) and provides a ~3x performance improvement for metadata-heavy operations compared to directory-based xattrs. For root pools, enable maximum performance by setting ```zfs set xattr=sa <pool/dataset>``` and running ```restorecon -Rv /``` to migrate existing labels to the faster System Attribute format.
-*   **Zero-Trust Model:** Configures its own temporary Git environment, requiring no prior user configuration or global Git settings.
-*   **Native Support for Fedora 43/44:** Validated on clean installations of Fedora 43 (Kernel 7.1.7-100) and Fedora 44 (Kernel 7.1.7-200), including snapshot-based simulations to ensure reproducibility.   
+*   **Zero-Trust Model:** Minimal, builds from source, you trust your own .rpm's built locally on your machine.
+*   **Native Support for Fedora 43/44:** Validated on clean installations of Fedora 43 (Kernel 7.1.9-100), and Fedora 44 (Kernel 7.1.9-200 & 7.2.0-259.vanilla), using snapshot-based simulations to ensure reproducibility.
 
 ## 🚀 Quick Start
 
@@ -70,9 +68,9 @@ To update to a newer version of this patched build:
 - **OS:** Fedora 43/44 (Fully validated). Also supports **RHEL 9**, **CentOS Stream 9**, **AlmaLinux 9**, **Rocky Linux 9**, and **Oracle Linux 9** via automatic distro detection.
   - *Logic verified for all DNF-based RPM distributions.*
 
-- **Kernel:** 7.1.x only
+- Kernel: 7.1.x - 7.2.x
 
-- **Source:** OpenZFS 2.4.3 (with official 2.4.4 backports)   
+- Source: OpenZFS 2.4.4 (Stable upstream release branch)
 
 ## 🏭 Enterprise & CI/CD Integration
 
@@ -82,10 +80,9 @@ This script is designed for **automation-first** environments, enabling secure, 
 *   **SBOM Ready:** The resulting RPMs contain complete dependency metadata (`Requires`/`Provides`) auto-generated from the compiled binaries. Standard enterprise tools (e.g., **Syft**, **Trivy**, **Anchore**) can instantly scan these RPMs to generate compliant **CycloneDX** or **SPDX** Software Bill of Materials (SBOM) artifacts. 
 *   **Secure Boot & UKI:** Generates modules compatible with Secure Boot and Unified Kernel Image (UKI) workflows. Integrates seamlessly with CI/CD pipelines to sign modules using organization-held Machine Owner Keys (MOK). 
 *   **Immutable Deployment:** Adopt a **"Build Once, Deploy Many"** strategy. Build the RPM in a CI pipeline (GitHub Actions, Jenkins, GitLab CI) and deploy the *exact same binary* across your entire cluster, ensuring bit-for-bit consistency and auditability.
-*   **Provenance:** Documents exact upstream commits (`a35e8d8`, `223b8bc`) in the build process, satisfying **NIST SSDF** provenance requirements and enabling easy audit trails for regulated environments.
 
 > **Example CI/CD Workflow:**
-> 1. Trigger: Initiate build on new Kernel 7.1.x release (or when updating backport commits in the script).
+> 1. Trigger: Initiate build on new Kernel 7.1.x/7.2.x release.
 > 2. Build: CI runs build.sh in an isolated container/VM, which automatically fetches source, applies patches, and builds RPMs.
 > 3. Sign: CI signs RPMs and modules with organization Secure Boot keys.
 > 4. Publish: CI pushes signed RPMs to a private DNF repository (e.g., GitHub Packages, Artifactory).
