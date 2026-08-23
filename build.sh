@@ -1,8 +1,9 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # --- Configuration ---
 ZFS_VERSION="2.4.4"
+ZFS_BRANCH="${ZFS_BRANCH:-zfs-${ZFS_VERSION}}" # Defaults to tag, but can be overridden
 WORK_DIR="/root/zfs-build-$$"
 REPO_DIR="/var/lib/zfs-local-repo"
 REPO_NAME="zfs-patched-local"
@@ -23,9 +24,9 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM ERR
 
-# --- Fedora Version Detection ---
-FEDORA_VERSION=$(rpm -E %fedora)
-echo "🔍 Detected Fedora version: $FEDORA_VERSION"
+# Detect Distro ID
+source /etc/os-release
+DISTRO_ID=${ID,,} # Convert to lowercase
 
 # Prepare Dependency List
 DEPS=(
@@ -43,9 +44,20 @@ DEPS=(
     libaio-devel
 )
 
-# Fedora 44+ requires explicit python3-setuptools (removed from python3-devel deps)
-if [[ $FEDORA_VERSION -ge 44 ]]; then
-    echo "⚠️  Fedora 44+ detected: Adding explicit python3-setuptools dependency..."
+if [[ "$DISTRO_ID" == "fedora" ]]; then
+    FEDORA_VERSION=$(rpm -E %fedora)
+    echo "🔍 Detected Fedora version: $FEDORA_VERSION"
+
+    # Fedora 44+ requires explicit python3-setuptools
+    if [[ $FEDORA_VERSION -ge 44 ]]; then
+        echo "⚠️  Fedora 44+ detected: Adding explicit python3-setuptools dependency..."
+        DEPS+=(python3-setuptools)
+    fi
+    # Fedora <=43: Relies on transitive dep from python3-devel (Correct)
+else
+    # RHEL, CentOS, Alma, Rocky, etc. ALWAYS need explicit setuptools
+    # They never had it as a transitive dependency in recent versions
+    echo "ℹ️  Non-Fedora RPM distro detected ($DISTRO_ID): Adding explicit python3-setuptools dependency..."
     DEPS+=(python3-setuptools)
 fi
 
@@ -65,20 +77,22 @@ echo "✅ All critical dependencies present."
 echo "📦 Installing build dependencies..."
 dnf install -y "${DEPS[@]}"
 
-echo "🚀 Starting OpenZFS 2.4.4-hutter build for Kernel 7.2.0..."
+echo "🚀 Starting OpenZFS ${ZFS_VERSION} build for Kernel 7.2.x..."
 
 mkdir -p "$WORK_DIR" "$REPO_DIR"
 export RPMBUILD_OPT="--topdir $WORK_DIR"
 mkdir -p "$WORK_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
-# 2. Clone Tony Hutter's 2.4.4 Branch (Direct Source)
 cd "$WORK_DIR"
-echo "📥 Cloning zfs-2.4.4-hutter branch (Kernel 7.2 ready)..."
-git clone --depth 1 --branch zfs-2.4.4-hutter https://github.com/tonyhutter/zfs.git "$WORK_DIR/SOURCES/zfs-2.4.4"
+
+# 2. Clone using the dynamic branch variable
+echo "📥 Cloning OpenZFS ${ZFS_BRANCH}..."
+git clone --depth 1 --branch "${ZFS_BRANCH}" -c advice.detachedHead=false \
+  https://github.com/openzfs/zfs.git "$WORK_DIR/SOURCES/zfs-${ZFS_VERSION}" 2>&1 | grep -v "is not a commit"
 
 # 3. Prepare RPM Build Environment from Git Source
 echo "🔧 Preparing source for RPM build..."
-cd "$WORK_DIR/SOURCES/zfs-2.4.4"
+cd "$WORK_DIR/SOURCES/zfs-${ZFS_VERSION}"
 
 # CRITICAL: Generate a clean tarball for rpmbuild from the Git checkout
 # This ensures the INSTALLED source in /usr/src/ has the correct META file and patches
@@ -92,14 +106,14 @@ cd "$WORK_DIR/SOURCES"
 
 # Optional: Verify the META file shows the correct kernel compatibility
 echo "   - Verifying META file..."
-grep "Linux-Maximum" "$WORK_DIR/SOURCES/zfs-2.4.4/META" || echo "⚠️ Warning: META file check failed"
+grep "Linux-Maximum" "$WORK_DIR/SOURCES/zfs-${ZFS_VERSION}/META" || echo "⚠️ Warning: META file check failed"
 
-# 7. Generate build system (REQUIRED for git checkouts)
+# 4. Generate build system (REQUIRED for git checkouts)
 echo "⚙️ Generating configure script..."
-cd "$WORK_DIR/SOURCES/zfs-2.4.4"
+cd "$WORK_DIR/SOURCES/zfs-${ZFS_VERSION}"
 sh autogen.sh
 
-# 7. Run configure to generate spec files and Makefiles
+# 5. Run configure to generate spec files and Makefiles
 echo "⚙️ Running configure..."
 ./configure --with-spec=redhat --without-libunwind --with-config=srpm
 
@@ -107,7 +121,7 @@ make dist-gzip
 
 mv zfs-2.4.4.tar.gz "$WORK_DIR/SOURCES/"
 
-# 8. Copy the generated spec file
+# 6. Copy the generated spec file
 if [ -f rpm/redhat/zfs.spec ]; then
     cp rpm/redhat/zfs.spec "$WORK_DIR/SPECS/"
 elif [ -f rpm/generic/zfs.spec ]; then
@@ -117,13 +131,13 @@ else
     exit 1
 fi
 
-# 9. Patch the SPEC file
+# 7. Patch the SPEC file
 echo "   - Patching zfs.spec..."
 SPEC_FILE="$WORK_DIR/SPECS/zfs.spec"
 
-# 10. Inject changelog entry (Robust Method)
-CHANGELOG_ENTRY="* Thu Aug 20 2026 Automated Build <builder@localhost> - ${ZFS_VERSION}-1
-- Automated build for Kernel 7.2.0 (zfs-2.4.4-hutter branch)"
+# 8. Inject changelog entry (Robust Method)
+CHANGELOG_ENTRY="* Thu Aug 22 2026 Automated Build <builder@localhost> - ${ZFS_VERSION}-1
+- Automated build for Kernel 7.2.x (zfs-${ZFS_VERSION}-stable branch)"
 
 if grep -q "^%changelog" "$SPEC_FILE"; then
     # Case A: Section exists -> Insert after the %changelog line
@@ -150,7 +164,7 @@ echo "🏗️ Building all RPMs (utils + dkms)..."
 make -j1 rpm-utils rpm-dkms
 
 
-# Extract the actual RPM paths from make output
+# 9. Extract the actual RPM paths from make output
 echo "📦 Collecting RPMs..."
 mkdir -p "$REPO_DIR"
 # RPMs are in the source directory where make was run
@@ -163,7 +177,7 @@ fi
 find "$WORK_DIR" -name "*.rpm" -newer "$WORK_DIR/SOURCES/zfs-${ZFS_VERSION}.tar.gz" \
     -exec cp {} "$REPO_DIR/" \; 2>/dev/null
 
-# Verify
+# 10. Verify
 RPM_COUNT=$(ls -1 "$REPO_DIR"/*.rpm 2>/dev/null | wc -l)
 if [ "$RPM_COUNT" -eq 0 ]; then
     echo "❌ No RPMs found. Searching /tmp..."
@@ -176,7 +190,7 @@ echo "   - $RPM_COUNT RPMs in $REPO_DIR"
 
 createrepo_c "$REPO_DIR"   
 
-# 15. Configure DNF Priority
+# 11. Configure DNF Priority
 echo "⚙️ Configuring DNF priority..."
 cat > /etc/yum.repos.d/${REPO_NAME}.repo <<EOF
 [${REPO_NAME}]
