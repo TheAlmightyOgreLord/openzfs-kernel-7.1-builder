@@ -1,16 +1,34 @@
-# OpenZFS Builder (Fedora 43/44 + Kernel 7.2.x)
+# OpenZFS Builder (DNF Distributions + Kernel 7.1.x - 7.2.x)
 
+This build script clones the [`zfs-2.4.4`](https://github.com/openzfs/zfs/releases/tag/zfs-2.4.4)
+tag from the [official OpenZFS repository](https://github.com/openzfs/zfs) by default.
+It is an **unofficial, community-maintained** build script. It is not endorsed
+by the OpenZFS project or Klara Systems.
+
+The script runs as sudo (self-checks to avoid confusion), builds OpenZFS from source within its own `rpmbuild`
+sandbox, creates a prioritized local dnf repo, and cleans up afterwards.
+
+## ⚙️ Dynamic Versioning
+
+By default, the script builds **OpenZFS 2.4.4**. To build any other version
+or branch, edit the top of `build.sh`:
+
+```bash
+ZFS_VERSION="2.4.4"
+ZFS_BRANCH="zfs-2.4.4"   # or: "zfs-2.4-release", "master", etc.   
+
+```
 ## Source
 This build script uses the [`zfs-2.4.4-hutter`](https://github.com/tonyhutter/zfs/tree/zfs-2.4.4-hutter)
 branch from [Tony Hutter's fork](https://github.com/tonyhutter/zfs) as its source.
 This is an **unofficial, community-maintained** build script. It is not endorsed
 by Tony Hutter, the OpenZFS project, or Klara Systems.
 
-This script runs as sudo, builds openzfs v2.4.4-hutter against kernel 7.2.x within its own sandbox, creates a prioritized local dnf repo, and cleans up afterwards.
+This script runs as sudo, builds OpenZFS v2.4.4-release against kernel 7.1.x - 7.2.x within its own sandbox, creates a prioritized local dnf repo, and cleans up afterwards.
 
 ## 🔧 Core Improvements (August 2026)
 
-*   **Native Kernel 7.2 Support:** Uses Tony Hutter's 2.4.4 upstream branch for kernel 7.2.x support
+*   **Native Kernel 7.1 & 7.2 Support:** Uses OpenZFS 2.4.4 upstream release branch for kernel 7.1.x - 7.2.x support
 *   **Native Async I/O Support:** Explicitly links libaio-devel to enable native asynchronous I/O.
 
     > Impact: Prevents fallback to inefficient POSIX emulation, ensuring maximum throughput and reduced latency for database and VM workloads.
@@ -18,30 +36,13 @@ This script runs as sudo, builds openzfs v2.4.4-hutter against kernel 7.2.x with
 *   **Enterprise SELinux Integration:** Explicitly links libattr-devel and allows the use of xattr=sa (System Attributes).
 
     > Impact: Enables granular, per-file SELinux labeling (required for strict security policies) and provides a ~3x performance improvement for metadata-heavy operations compared to directory-based xattrs. For root pools, enable maximum performance by setting ```zfs set xattr=sa <pool/dataset>``` and running ```restorecon -Rv /``` to migrate existing labels to the faster System Attribute format.
-*   **Zero-Trust Model:** Minimal, builds from source, you trust your own .rpm's locally built on your machine.
-*   **Native Support for Fedora 43/44:** Validated on clean installations of Fedora 43 with Kernel 7.2.0-259.vanilla.fc43.x86_64. (**Fedora 44 is not tested yet, use at your own risk**), including snapshot-based simulations to ensure reproducibility.
+*   **Zero-Trust Model:** Minimal, builds from source, you trust your own .rpm's built locally on your machine.
+*   **Native Support for Fedora 43/44:** Validated on clean installations of Fedora 43 (Kernel 7.1.9-100), and Fedora 44 (Kernel 7.1.9-200 & 7.2.0-259.vanilla), using snapshot-based simulations to ensure reproducibility.
 
 ## 🚀 Quick Start
 
-## Prerequisites: Install Kernel 7.2.0 on Fedora 43
-
-Fedora 43 stable is currently on **7.1.8-100**, which lacks critical
-Bluetooth CVE fixes (CVE-2026-68189, CVE-2026-1001). Kernel **7.2.0**
-(released Aug 16, 2026) patches all of them.
-
-### 1. Enable the Kernel Vanilla COPR 
-> Be aware you're trusting a copr repo, for true zero-trust build from source or wait for 7.2.x to drop
-
 ```bash
-sudo dnf -y copr enable @kernel-vanilla/stable
-
-sudo dnf -y install kernel-7.2.0 kernel-devel-7.2.0 kernel-headers-7.2.0
-```
-> Note: May require signing kernel using pesign to get it to boot
-
-### 2. Clone This Branch
-```bash
-git clone --branch zfs-2.4.4-k7.2 --single-branch --depth 1 https://github.com/TheAlmightyOgreLord/openzfs-kernel-7.1-builder.git
+git clone https://github.com/TheAlmightyOgreLord/openzfs-kernel-7.1-builder.git
 cd openzfs-kernel-7.1-builder
 sudo ./build.sh
 ```
@@ -71,11 +72,12 @@ To update to a newer version of this patched build:
 
 ## ⚠️ Constraints
 
-- OS: Fedora 43 and Fedora 44 (Untested on Fedora 44 and other distros)
+- **OS:** Fedora 43/44 (Fully validated). Also supports **RHEL 9**, **CentOS Stream 9**, **AlmaLinux 9**, **Rocky Linux 9**, and **Oracle Linux 9** via automatic distro detection.
+  - *Logic verified for all DNF-based RPM distributions.*
 
 - Kernel: 7.1.x - 7.2.x
 
-- Source: OpenZFS 2.4.4 (Tony Hutter's upstream branch)
+- Source: OpenZFS 2.4.4 (Stable upstream release branch)
 
 ## 🏭 Enterprise & CI/CD Integration
 
@@ -87,7 +89,7 @@ This script is designed for **automation-first** environments, enabling secure, 
 *   **Immutable Deployment:** Adopt a **"Build Once, Deploy Many"** strategy. Build the RPM in a CI pipeline (GitHub Actions, Jenkins, GitLab CI) and deploy the *exact same binary* across your entire cluster, ensuring bit-for-bit consistency and auditability.
 
 > **Example CI/CD Workflow:**
-> 1. Trigger: Initiate build on new Kernel 7.2.x release.
+> 1. Trigger: Initiate build on new Kernel 7.1.x/7.2.x release.
 > 2. Build: CI runs build.sh in an isolated container/VM, which automatically fetches source, applies patches, and builds RPMs.
 > 3. Sign: CI signs RPMs and modules with organization Secure Boot keys.
 > 4. Publish: CI pushes signed RPMs to a private DNF repository (e.g., GitHub Packages, Artifactory).
