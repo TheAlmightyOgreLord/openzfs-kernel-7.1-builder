@@ -117,7 +117,14 @@ sh autogen.sh
 
 # 5. Run configure to generate spec files and Makefiles
 echo "⚙️ Running configure..."
-./configure --with-spec=redhat --without-libunwind --with-config=srpm
+./configure \
+    --with-spec=redhat \
+    --without-libunwind \
+    --with-config=srpm \
+    --enable-release \
+    --disable-debug \
+    --disable-debuginfo \
+    --disable-debug-kmem
 
 echo "" >> zfs.spec
 echo "%changelog" >> zfs.spec
@@ -138,6 +145,8 @@ make -j1 rpm-utils rpm-dkms
 # 6. Extract the actual RPM paths from make output
 echo "📦 Collecting RPMs..."
 mkdir -p "$REPO_DIR"
+sudo rm -f "$REPO_DIR"/*.rpm
+
 # RPMs are in the source directory where make was run
 RPM_SRC="$WORK_DIR/SOURCES/zfs-${ZFS_VERSION}"
 if [ -d "$RPM_SRC" ]; then
@@ -158,7 +167,6 @@ fi
 
 echo "   - $RPM_COUNT RPMs in $REPO_DIR"
 
-
 createrepo_c "$REPO_DIR"   
 
 # 8. Configure DNF Priority
@@ -178,9 +186,14 @@ cd /
 chmod -R +w "$WORK_DIR" 2>/dev/null || true
 rm -rf "$WORK_DIR"
 
+# 🔓 Clear specific versionlocks (Minimalist Approach)
+echo "🔓 Clearing versionlocks for core ZFS packages..."
+dnf versionlock delete zfs zfs-dkms zfs-dracut 2>/dev/null || true
+
 echo "✅ SUCCESS!"
 echo "   - Repository created at: $REPO_DIR"
 echo "   - DNF config: /etc/yum.repos.d/${REPO_NAME}.repo"
+echo "   - Versionlocks cleared for: zfs, zfs-dkms, zfs-dracut"
 echo ""
 echo "Next steps:"
 echo "   1. Remove old ZFS and dependencies: dnf remove zfs zfs-dkms zfs-dracut libnvpair* libuutil* libzfs* libzpool* --setopt protected_packages="
