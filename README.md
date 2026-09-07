@@ -10,13 +10,22 @@ sandbox, creates a prioritized local dnf repo, and cleans up afterwards.
 
 ## ⚙️ Dynamic Versioning
 
-By default, the script builds **OpenZFS 2.4.4**. To build any other version
-or branch, edit the top of `build.sh`:
+By default, the script builds **OpenZFS 2.4.4**. To build any other version, repo,
+or branch override the environment variables before running ./build.sh:
 
 ```bash
 ZFS_VERSION="2.4.4"
+ZFS_REPO="https://github.com/openzfs/zfs.git"
 ZFS_BRANCH="zfs-2.4.4"   # or: "zfs-2.4-release", "master", etc.   
+```
+### Linux 7.3 compat build (based on **OpenZFS 2.4.4**)
 
+To build against the [kernel-7.3-compat](https://github.com/TheAlmightyOgreLord/zfs/tree/kernel-7.3-compat) branch (fixes `fs_struct`, `bi_offset`, `static_cpu_has`, and `iops->create` for 7.3):
+
+```bash
+sudo ZFS_REPO=https://github.com/TheAlmightyOgreLord/zfs.git \
+     ZFS_BRANCH=kernel-7.3-compat \
+     ./build.sh
 ```
 
 ## 🔧 Core Improvements (August 2026)
