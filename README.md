@@ -20,7 +20,7 @@ ZFS_BRANCH="zfs-2.4.4"   # or: "zfs-2.4-release", "master", etc.
 ```
 ### Linux 7.3 compat build (based on **OpenZFS 2.4.4**)
 
-To build against the [kernel-7.3-compat](https://github.com/TheAlmightyOgreLord/zfs/tree/kernel-7.3-compat) branch (fixes `fs_struct`, `bi_offset`, `static_cpu_has`, and `iops->create` for 7.3):
+To build against my [kernel-7.3-compat](https://github.com/TheAlmightyOgreLord/zfs/tree/kernel-7.3-compat) branch (fixes `fs_struct`, `bi_offset`, `static_cpu_has`, and `iops->create` for 7.3):
 
 ```bash
 sudo ZFS_REPO=https://github.com/TheAlmightyOgreLord/zfs.git \
