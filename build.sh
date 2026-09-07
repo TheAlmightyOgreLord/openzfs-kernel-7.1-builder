@@ -3,6 +3,7 @@ set -euo pipefail
 
 # --- Configuration ---
 ZFS_VERSION="2.4.4"
+ZFS_REPO="${ZFS_REPO:-https://github.com/openzfs/zfs.git}"
 ZFS_BRANCH="${ZFS_BRANCH:-zfs-${ZFS_VERSION}}" # Defaults to tag, but can be overridden
 WORK_DIR="/root/zfs-build-$$"
 REPO_DIR="/var/lib/zfs-local-repo"
@@ -79,7 +80,7 @@ echo "✅ All critical dependencies present."
 echo "📦 Installing build dependencies..."
 dnf install -y "${DEPS[@]}"
 
-echo "🚀 Starting OpenZFS ${ZFS_VERSION} build for Kernel 7.2.x..."
+echo "🚀 Starting OpenZFS ${ZFS_VERSION} build"
 
 mkdir -p "$WORK_DIR" "$REPO_DIR"
 export RPMBUILD_OPT="--topdir $WORK_DIR"
@@ -88,9 +89,9 @@ mkdir -p "$WORK_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 cd "$WORK_DIR"
 
 # 2. Clone using the dynamic branch variable
-echo "📥 Cloning OpenZFS ${ZFS_BRANCH}..."
+echo "📥 Cloning OpenZFS ${ZFS_BRANCH} from ${ZFS_REPO}..."
 git clone --depth 1 --branch "${ZFS_BRANCH}" -c advice.detachedHead=false \
-  https://github.com/openzfs/zfs.git "$WORK_DIR/SOURCES/zfs-${ZFS_VERSION}" 2>&1 | grep -v "is not a commit"
+  "${ZFS_REPO}" "$WORK_DIR/SOURCES/zfs-${ZFS_VERSION}" 2>&1 | grep -v "is not a commit"
 
 # 3. Prepare RPM Build Environment from Git Source
 echo "🔧 Preparing source for RPM build..."
